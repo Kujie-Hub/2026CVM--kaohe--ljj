@@ -28,7 +28,7 @@ import sys
 import time
 from datetime import datetime
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, request, send_from_directory
 
 # ---------------------------------------------------------------------------
 # 常量
@@ -40,7 +40,10 @@ DEFAULT_SVG_DIR = os.environ.get("SVG_DIR", "/data/perf_svg")
 # 脚本目录
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = Flask(__name__)
+# web/ 静态文件目录（与 api.py 同级的 web/ 文件夹）
+WEB_DIR = os.path.join(SCRIPT_DIR, "web")
+
+app = Flask(__name__, static_folder=WEB_DIR, static_url_path="")
 
 # 全局配置，在 main() 中设置
 config = {
@@ -129,6 +132,25 @@ def get_file_timestamps(data_dir: str) -> list[dict]:
         except OSError:
             continue
     return files_info
+
+
+# ======================================================================
+# 前端页面 & 静态文件
+# ======================================================================
+
+@app.route("/", methods=["GET"])
+def index():
+    """返回 Web 前端首页。"""
+    return send_from_directory(WEB_DIR, "index.html")
+
+
+@app.route("/<path:path>", methods=["GET"])
+def serve_static(path):
+    """提供 web/ 目录下的静态文件（备用）。"""
+    file_path = os.path.join(WEB_DIR, path)
+    if os.path.isfile(file_path):
+        return send_from_directory(WEB_DIR, path)
+    return jsonify({"error": "Not Found"}), 404
 
 
 # ======================================================================
@@ -339,6 +361,7 @@ def api_flamegraph():
 @app.errorhandler(404)
 def handle_404(e):
     return jsonify({"error": "接口不存在", "available": [
+        "/  (Web 前端)",
         "/api/health",
         "/api/status",
         "/api/files",
@@ -405,10 +428,11 @@ def main():
     print(f"  flamegraph:  {get_flamegraph_script()}")
     print("=" * 50)
     print(f"  接口:")
-    print(f"    GET /api/health")
-    print(f"    GET /api/status")
-    print(f"    GET /api/files?start=...&end=...")
-    print(f"    GET /api/flamegraph?file=...&width=...")
+    print(f"    GET /                     Web 前端")
+    print(f"    GET /api/health           健康检查")
+    print(f"    GET /api/status           系统概览")
+    print(f"    GET /api/files?start=...&end=...  文件查询")
+    print(f"    GET /api/flamegraph?file=...&width=...  火焰图生成")
     print("=" * 50)
 
     # 启动 Flask（生产环境建议配合 gunicorn，此处保持简单）
